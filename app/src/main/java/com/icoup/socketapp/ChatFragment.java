@@ -4,19 +4,22 @@ import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
-import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.TextView;
 
+import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.IO;
 import com.github.nkzawa.socketio.client.Socket;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -32,7 +35,7 @@ public class ChatFragment extends Fragment {
 
     private EditText mInputMessageView;
     private RecyclerView mMessagesView;
-    private List<Message> mMessages = new ArrayList<Message>();
+    private List<com.icoup.socketapp.Message> mMessages = new ArrayList<>();
     private RecyclerView.Adapter mAdapter;
 
     private OnFragmentInteractionListener mListener;
@@ -40,14 +43,13 @@ public class ChatFragment extends Fragment {
     private Socket socket;
     {
         try{
-            socket = IO.socket("http://192.168.1.10:3000");
+            socket = IO.socket("http://192.168.1.6:3000");
         }catch(URISyntaxException e){
             throw new RuntimeException(e);
         }
     }
 
 
-    // TODO: Rename and change types and number of parameters
     public static ChatFragment newInstance(String param1, String param2) {
         ChatFragment fragment = new ChatFragment();
         Bundle args = new Bundle();
@@ -58,7 +60,6 @@ public class ChatFragment extends Fragment {
     }
 
     public ChatFragment() {
-        // Required empty public constructor
     }
 
     @Override
@@ -67,6 +68,7 @@ public class ChatFragment extends Fragment {
         setHasOptionsMenu(true);
         socket.connect();
         Log.e("Kullanıcı Durumu", "Katıldı");
+        socket.on("message",gelenleriOku);
         }
 
 
@@ -91,8 +93,8 @@ public class ChatFragment extends Fragment {
         mMessagesView.setLayoutManager(new LinearLayoutManager(getActivity()));
         mMessagesView.setAdapter(mAdapter);
 
-        ImageButton sendButton = (ImageButton) view.findViewById(R.id.send_button);
-        mInputMessageView = (EditText) view.findViewById(R.id.message_input);
+        Button sendButton = (Button) view.findViewById(R.id.send_button);
+        mInputMessageView = (EditText) view.findViewById(R.id.mesajyaz);
 
         sendButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -105,14 +107,38 @@ public class ChatFragment extends Fragment {
     private void sendMessage(){
         String message = mInputMessageView.getText().toString().trim();
         mInputMessageView.setText("");
-        socket.emit("message",message);
-       // addMessage(message);
+
+        addMessage(message);
+        socket.emit("message", message);
 
     }
 
+    private Emitter.Listener gelenleriOku = new Emitter.Listener(){
+        @Override
+        public void call(final Object... args) {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    JSONObject data = (JSONObject)args[0];
+                    String message;
+                    try {
+                        message = data.getString("message").toString();
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        return;
+                    }
+                    addMessage(message);
+                }
+            });
+        }
+    };
+
     private void addMessage(String msj){
 
-    //    mMessages.add(new Message.);
+       mMessages.add(new com.icoup.socketapp.Message.Builder(com.icoup.socketapp.Message.TYPE_MESSAGE).message(msj).build());
+        mAdapter = new MessageAdapter(mMessages);
+        mAdapter.notifyItemInserted(0);
+        mMessagesView.scrollToPosition(mAdapter.getItemCount() - 1);
     }
 
 
@@ -129,7 +155,7 @@ public class ChatFragment extends Fragment {
     @Override
     public void onAttach(Activity activity) {
         super.onAttach(activity);
-      //  mAdapter = new MessageAdapter( mMessages);
+       mAdapter = new MessageAdapter( mMessages);
     }
 
     @Override
